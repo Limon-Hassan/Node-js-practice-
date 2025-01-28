@@ -1,50 +1,72 @@
 let express = require("express");
 const connection = require("./dbConfig");
 const Taskschema = require("./Model/Taskschema");
+var jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const userMidle = require("./Midlewere/userMidlewere");
 let app = express();
+require('dotenv').config()
 connection()
 app.use(express.json())
+console.log(process.env.Db_URL)
 
-//#Data create korlam 
-app.post('/create', async (req, res) => {
-  let { displayName, Nikname } = req.body
 
-  let dhoroAmi = new Taskschema({
-    name: displayName,
-    wifeName: Nikname,
-  })
-  await dhoroAmi.save()
-  res.status(201).send("data gese re !")
+app.post('/registation', async (req, res) => {
+  let { name, email, password, role } = req.body;
+  if (!name || !email || !password || !role) {
+    res.status(404).send({ mgs: "Please Fill all" })
+  } else {
+    if (role == "admin" || role == "user") {
+      bcrypt.hash(password, 10, async function (err, hash) {
+        let gelore = new Taskschema({
+          name,
+          email,
+          password: hash,
+          role
+        })
+        await gelore.save()
+        res.status(201).send({ mgs: "Data gese ree!!!!" })
+      })
+    } else {
+      res.send("bad")
+    }
+
+
+
+  }
+
+
 })
 
-//Data dekhlam
-app.get('/paisire', async (req, res) => {
-  let results = await Taskschema.find({})
-  res.status(200).send(results)
+app.post('/login', async (req, res) => {
+  let { email, password } = req.body;
+  let existingUser = await Taskschema.findOne({ email })
+
+  if (existingUser) {
+    bcrypt.compare(password, existingUser.password, function (err, result) {
+      if (result) {
+        let role = existingUser.role;
+        let token = jwt.sign({ email, role }, process.env.JTW_Token, { expiresIn: '1h' })
+        res.status(200).send({ msg: "Login Success", data: token })
+      } else {
+        res.status(404).send({ mgs: "Invaild email/password" })
+      }
+    })
+
+  } else {
+    res.status(404).send({ mgs: "Invaild email/password" })
+  }
 })
 
-//Data Delete Korlam
-app.delete('/deletekorbo/:id', async (req, res) => {
-  let { id } = req.params
-  let deleteMami = await Taskschema.findOneAndDelete({ _id: id })
-  res.status(200).send({ msg: "delete hoise", data: deleteMami })
+app.get("/alluser", userMidle, async (req, res) => {
+  try {
+    let users = await Taskschema.find()
+    res.send(users)
+  } catch (error) {
+    console.log(error)
+    res.status(404).send({ mgs: "Invaild email/password" })
+  }
 })
-
-// Data Update
-app.patch('/update/:id', async (req, res) => {
-  let { id } = req.params;
-  let { displayName } = req.body
-  let update = await Taskschema.findOneAndUpdate({ _id: id }, { name: displayName }, { new: true })
-  res.status(200).send({ msg: "Update Hoise", data: update })
-})
-
-// app.post(('/'), async (req, res) => {
-//   let task = new Taskschema({
-//     name: "Limon"
-//   })
-//   let finalresult = await task.save()
-//   res.status(201).send(finalresult)
-// })
 
 app.listen(5000, () => {
   console.log("the server is running")
